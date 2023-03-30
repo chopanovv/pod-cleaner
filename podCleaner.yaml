@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cleaner-pod
+  namespace: default
+data:
+  cleanup.sh: |
+    #!/bin/bash
+    # Get list of namespaces
+    namespaces=$(kubectl get namespaces -o name)
+
+    # Loop through each namespace
+    for namespace in $namespaces; do
+        # Get list of failed pods in namespace
+        failed_pods=$(kubectl get pods -n ${namespace#namespace/} --field-selector=status.phase!=Running,status.phase!=Succeeded -o name)
+
+        # Loop through each failed pod and delete it
+        for pod in $failed_pods; do
+            kubectl delete $pod -n ${namespace#namespace/}
+        done
+    done
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cleaner-pod
+  namespace: default
+spec:
+  schedule: "0 * * * *"
+  failedJobsHistoryLimit: 1
+  successfulJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: cleaner-pod
+          volumes:
+            - name: cleaner-pod
+              configMap:
+                name: cleaner-pod
+                defaultMode: 511
+          containers:
+            - name: kubectl-runner
+              image: portainer/kubectl-shell:latest
+              command: ["/bin/bash", "-c", "/home/cleanup.sh"]
+              volumeMounts:
+                - name: cleaner-pod
+                  mountPath: /home/cleanup.sh
+                  subPath: cleanup.sh
+          restartPolicy: OnFailure
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: cleaner-pod
+rules:
+  - apiGroups: [""] # "" indicates the core API group
+    resources: ["pods", "namespaces"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cleaner-pod
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cleaner-pod
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cleaner-pod
+subjects:
+  - kind: ServiceAccount
+    name: cleaner-pod
+    namespace: default
