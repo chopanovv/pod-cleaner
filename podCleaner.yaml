@@ -55,7 +55,7 @@ metadata:
   name: cleaner-pod
 rules:
   - apiGroups: [""] # "" indicates the core API group
-    resources: ["pods", "namespaces"]
+    resources: ["pods", "namespaces","secrets"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
 apiVersion: v1
