@@ -22,6 +22,10 @@ data:
         echo "Uninstalling Helm release named 'review' in namespace $ns"
         helm uninstall --namespace "$ns" review
       fi
+      if echo "$ns" | grep -q "review"; then
+        echo "Deleting namespace $ns"
+        kubectl delete namespace "$ns"
+      fi      
     done
 ---
 apiVersion: batch/v1
